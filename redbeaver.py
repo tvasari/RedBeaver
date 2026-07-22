@@ -28,15 +28,11 @@ from pathlib import Path
 # core logic.
 # =====================================================================
 
-# Protocol/service subfolders under Information_Gathering/Service_Enumeration
+# Protocol/service subfolders under Information_Gathering/Service_Enumeration.
+# Kept to a single example entry on purpose - add your own protocols here
+# following the same naming pattern (e.g. "SSH", "SMB", "LDAP", ...).
 SERVICE_ENUMERATION_PROTOCOLS = [
     "HTTP",
-    "SSH",
-    "FTP",
-    "SMB",
-    "RDP",
-    "SNMP",
-    "DNS",
 ]
 
 # Tool subfolders under Information_Gathering/Automated_Scans
@@ -53,14 +49,38 @@ AUTHENTICATION_FILES = {
     "other.txt": "",
 }
 
+# Hosts under Information_Gathering/Local_Enumeration, each gets its own
+# folder with a notes.md file. Use this to keep track of enumeration
+# performed on compromised local systems (one folder per host).
+LOCAL_ENUMERATION_HOSTS = [
+    "Host1",
+]
+
+# Content of each host's notes.md under Local_Enumeration. {host_name} is
+# substituted automatically.
+LOCAL_ENUMERATION_NOTES_TEMPLATE = """# {host_name} - Local Enumeration
+
+## System Info
+
+
+## Users & Privileges
+
+
+## Network
+
+
+## Installed Software / Services
+
+
+## Interesting Findings
+
+"""
+
 # Name of the placeholder vulnerability folder created under Vulnerabilities/.
 # Copy-paste this folder and rename it for every new finding.
 VULN_TEMPLATE_FOLDER_NAME = "Vuln_Template"
 
-# Subfolders created inside each vulnerability folder (template included)
-VULN_SUBFOLDERS = ["Discovery", "Verification", "Impact"]
-
-# Mock/example evidence files dropped into the vuln template's Discovery
+# Mock/example evidence files dropped directly into the vuln template
 # folder, illustrating the "<Step>-<Description>.<ext>" naming convention.
 # Remove or add entries here if you want different examples.
 VULN_EXAMPLE_FILES = [
@@ -72,6 +92,7 @@ VULN_EXAMPLE_FILES = [
 # Default values used when the user just presses Enter
 DEFAULT_CLIENT_NAME = "Client_Name"
 DEFAULT_ACTIVITY_NAME = "Activity_Type"
+DEFAULT_OUTPUT_DIR = "."
 
 # Content of notes.md inside the vulnerability template. {vuln_name} is
 # substituted automatically.
@@ -120,6 +141,18 @@ def prompt(question: str, default: str) -> str:
     return answer if answer else default
 
 
+def _build_local_enumeration_section() -> dict:
+    """Builds the Local_Enumeration/<Host>/notes.md section."""
+    return {
+        host: {
+            "_files": {
+                "notes.md": LOCAL_ENUMERATION_NOTES_TEMPLATE.format(host_name=host)
+            }
+        }
+        for host in LOCAL_ENUMERATION_HOSTS
+    }
+
+
 def build_structure() -> dict:
     """
     Builds the folder/file spec as a nested dict.
@@ -144,18 +177,15 @@ def build_structure() -> dict:
             "Automated_Scans": {
                 "_dirs": AUTOMATED_SCAN_TOOLS,
             },
+            "Local_Enumeration": _build_local_enumeration_section(),
         },
         "Vulnerabilities": {
             VULN_TEMPLATE_FOLDER_NAME: {
-                "Discovery": {
-                    "_files": {name: "" for name in VULN_EXAMPLE_FILES},
-                },
-                "Verification": {},
-                "Impact": {},
                 "_files": {
                     "notes.md": VULN_NOTES_TEMPLATE.format(
                         vuln_name=VULN_TEMPLATE_FOLDER_NAME
-                    )
+                    ),
+                    **{name: "" for name in VULN_EXAMPLE_FILES},
                 },
             },
         },
@@ -207,8 +237,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-dir",
-        default=".",
-        help="Directory in which the Client_Name folder is created (default: current directory)",
+        default=None,
+        help="Directory in which the Client_Name folder is created "
+        "(default: current directory). If omitted, you'll be prompted for it.",
     )
     return parser.parse_args()
 
@@ -239,7 +270,13 @@ def main() -> None:
     print("=== RedBeaver - Activity Structure Generator ===\n")
 
     client_name = args.client or prompt("Client name", DEFAULT_CLIENT_NAME)
-    client_path = Path(args.output_dir).resolve() / sanitize_name(client_name)
+
+    output_dir = (
+        args.output_dir
+        if args.output_dir is not None
+        else prompt("Output directory", DEFAULT_OUTPUT_DIR)
+    )
+    client_path = Path(output_dir).resolve() / sanitize_name(client_name)
 
     if args.activity_name:
         # Non-interactive: create exactly one activity, numbered 01.
